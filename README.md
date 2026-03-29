@@ -1,6 +1,6 @@
 ## Automation and Monitoring System
 
-This project includes an automation subsystem based on an **ESP32** for temperature control and real-time process monitoring of the biodigester.
+This project includes an automation subsystem based on an ESP32 for temperature control and real-time process monitoring of the biodigester.
 
 ### Objective
 
@@ -76,9 +76,62 @@ The current control logic is based on hysteresis temperature control.
 
 ---
 
+## Wiring Diagram
+
+### GPIO Pin Assignment
+
+| Component | Signal | ESP32 GPIO |
+|-----------|--------|------------|
+| MAX6675 | SCK | GPIO18 |
+| MAX6675 | CS | GPIO5 |
+| MAX6675 | SO (MISO) | GPIO19 |
+| DS18B20 (x2) | DATA | GPIO4 |
+| LCD 2004A (I2C) | SDA | GPIO21 |
+| LCD 2004A (I2C) | SCL | GPIO22 |
+| pH Sensor | Analog Out | GPIO34 (ADC1) |
+| SSR - Heater | Control | GPIO25 |
+| SSR - Pump | Control | GPIO26 |
+
+> **Note:** GPIO34 is used for the pH sensor because ADC2 pins are unavailable when Wi-Fi is active. Only ADC1 pins (GPIO 32-39) can be used for analog readings with Wi-Fi enabled.
+
+> **Note:** Multiple DS18B20 sensors (biodigester + pump) share the same OneWire data line (GPIO4). Each sensor has a unique address and is identified automatically.
+
+### Power Distribution
+
+| Component | Voltage | Source |
+|-----------|---------|--------|
+| LCD 2004A | 5V | ESP32 VIN (5V) |
+| MAX6675 | 5V | ESP32 VIN (5V) |
+| pH Sensor Module | 5V | ESP32 VIN (5V) |
+| DS18B20 (x2) | 3.3V | ESP32 3.3V |
+
+All GND pins are connected to a common ground rail.
+
+### Wiring Notes
+
+```
+ESP32 5V (VIN) ─── Breadboard + Rail ──┬── LCD VCC
+                                       ├── MAX6675 VCC
+                                       └── pH Module VCC
+
+ESP32 3.3V ──────── DS18B20 VCC (Red wire, both sensors)
+
+ESP32 GND ──────── Breadboard - Rail ──┬── LCD GND
+                                       ├── MAX6675 GND
+                                       ├── DS18B20 GND (Black wire, both sensors)
+                                       └── pH Module GND
+
+DS18B20 DATA (Yellow wire, both sensors) ── GPIO4
+                                            └── 4.7kΩ pull-up resistor to 3.3V
+```
+
+> **Important:** A 4.7kΩ pull-up resistor is required between the DS18B20 data line and 3.3V for reliable OneWire communication.
+
+---
+
 ## Local LCD Display
 
-A **20x4 LCD (2004A, 5V Blue Screen)** is connected to the ESP32 via I2C to provide on-site monitoring without requiring network access.
+A 20x4 LCD (2004A, 5V Blue Screen) is connected to the ESP32 via I2C to provide on-site monitoring without requiring network access.
 
 ### Information displayed on the LCD
 - Line 1: Biodigester slurry temperature
@@ -156,4 +209,4 @@ This logic will be migrated and expanded to the ESP32 platform, adding:
 
 ## Summary
 
-The automation subsystem is designed to turn the biodigester into a **monitored and temperature-controlled system**, using an **ESP32** as the central controller, with both local LCD display and remote Wi-Fi monitoring capabilities.
+The automation subsystem is designed to turn the biodigester into a monitored and temperature-controlled system, using an ESP32 as the central controller.
