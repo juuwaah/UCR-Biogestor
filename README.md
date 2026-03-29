@@ -32,11 +32,12 @@ The ESP32 acquires the following process variables:
 
 This automation system is based on an ESP32 microcontroller connected to the sensors and to the heating control stage.
 
-The system performs three main tasks:
+The system performs four main tasks:
 
 1. Read sensors periodically
-2. Control the heating system
-3. Send data through Wi-Fi to the monitoring website
+2. Control the heating system (heater and circulation pump)
+3. Display real-time status on a local LCD screen
+4. Send data through Wi-Fi to the monitoring website
 
 
 ---
@@ -62,13 +63,30 @@ The current control logic is based on hysteresis temperature control.
 - **ESP32**
 
 ### Sensors
-- **DS18B20 temperature sensor** for biodigester temperature
-- **DS18B20 temperature sensor** for hot water tank temperature
+- **MAX6675 thermocouple module** for hot water tank temperature
+- **DS18B20 temperature sensor** for biodigester slurry temperature and pump temperature management
 - **Analog pH sensor module** for slurry pH measurement
 
+### Display
+- **20x4 LCD 2004A Module (5V Blue Screen)** with I2C interface for local real-time display of tank temperature and heating status
+
 ### Actuation
-- **SSR (Solid State Relay)** or relay module for switching the heating system
-- Optional pump control relay for circulation management
+- **SSR (Solid State Relay)** for switching the water heater
+- **SSR (Solid State Relay)** for circulation pump control, with temperature management via DS18B20
+
+---
+
+## Local LCD Display
+
+A **20x4 LCD (2004A, 5V Blue Screen)** is connected to the ESP32 via I2C to provide on-site monitoring without requiring network access.
+
+### Information displayed on the LCD
+- Line 1: Biodigester slurry temperature
+- Line 2: Hot water tank temperature
+- Line 3: Heating system status (ON / OFF)
+- Line 4: Pump status (ON / OFF)
+
+This allows operators to check the system status directly at the installation site.
 
 ---
 
@@ -116,7 +134,6 @@ At this stage, the automation subsystem is defined to include:
 
 Possible future upgrades include:
 
-- Automatic pump synchronization with heater operation
 - Safety shutdown in case of sensor failure
 - Maximum water temperature protection
 - Remote setpoint adjustment from the website
@@ -139,4 +156,4 @@ This logic will be migrated and expanded to the ESP32 platform, adding:
 
 ## Summary
 
-The automation subsystem is designed to turn the biodigester into a **monitored and temperature-controlled system**, using an **ESP32** as the central controller.
+The automation subsystem is designed to turn the biodigester into a **monitored and temperature-controlled system**, using an **ESP32** as the central controller, with both local LCD display and remote Wi-Fi monitoring capabilities.
