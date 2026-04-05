@@ -114,18 +114,18 @@ ESP32 5V (VIN) ─── Breadboard + Rail ──┬── LCD VCC
                                        ├── MAX6675 VCC
                                        └── pH Module VCC
 
-ESP32 3.3V ──────── DS18B20 VCC (Red wire, both sensors)
+ESP32 3.3V ──┬── DS18B20 VCC (Red wire, both sensors)
+             └── 4.7kΩ pull-up resistor ── DS18B20 DATA (White wire)
 
 ESP32 GND ──────── Breadboard - Rail ──┬── LCD GND
                                        ├── MAX6675 GND
                                        ├── DS18B20 GND (Black wire, both sensors)
                                        └── pH Module GND
 
-DS18B20 DATA (Yellow wire, both sensors) ── GPIO4
-                                            └── 4.7kΩ pull-up resistor to 3.3V
+DS18B20 DATA (White wire, both sensors) ── GPIO4
 ```
 
-> **Important:** A 4.7kΩ pull-up resistor is required between the DS18B20 data line and 3.3V for reliable OneWire communication.
+> **Important:** A 4.7kΩ pull-up resistor is required between DS18B20 VCC (Red, 3.3V) and DATA (White, GPIO4) for reliable OneWire communication.
 
 ---
 
