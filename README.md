@@ -17,20 +17,22 @@ The goal of the automation system is to:
 
 The ESP32 acquires the following process variables:
 
-- **Biodigester slurry (boñiga) temperature**  
+- **Biodigester slurry (boñiga) temperature**
   Temperature of the cow manure mixture inside the main tank
 
-- **Hot water tank temperature**  
+- **Hot water tank temperature**
   Temperature of the water used in the external heating loop
 
-- **pH of the slurry**  
-  To monitor fermentation conditions and process stability
+- **Pump temperature**
+  Temperature near the circulation pump for thermal management
+
+All three temperatures are measured using DS18B20 waterproof probe sensors on a shared OneWire bus.
 
 ---
 
 ## General System Description
 
-This automation system is based on an ESP32 microcontroller connected to the sensors and to the heating control stage.
+This automation system is based on an **ESP32-WROOM-32E** microcontroller connected to the sensors and to the heating control stage.
 
 The system performs four main tasks:
 
@@ -57,22 +59,21 @@ The current control logic is based on hysteresis temperature control.
 
 ---
 
-## Hardware Considered
+## Hardware
 
 ### Microcontroller
-- **ESP32**
+- **ESP32-WROOM-32E** (Espressif)
 
 ### Sensors
-- **MAX6675 thermocouple module** for hot water tank temperature
-- **DS18B20 temperature sensor** for biodigester slurry temperature and pump temperature management
-- **Analog pH sensor module** for slurry pH measurement
+- **DS18B20 waterproof probe sensors (x3)** for biodigester slurry temperature, hot water tank temperature, and pump temperature management. All three sensors share a single OneWire bus and each is identified by its unique 64-bit ROM address.
 
 ### Display
-- **20x4 LCD 2004A Module (5V Blue Screen)** with I2C interface for local real-time display of tank temperature and heating status
+- **20x4 LCD 2004A Module (5V Blue Screen)** with I2C interface, connected via a **bidirectional I2C level shifter** (3.3V ↔ 5V) for local real-time display
 
 ### Actuation
-- **SSR (Solid State Relay)** for switching the water heater
-- **SSR (Solid State Relay)** for circulation pump control, with temperature management via DS18B20
+- **SSR (Solid State Relay)** for switching the water heater (AC load)
+- **SSR (Solid State Relay)** for circulation pump control (AC load)
+- Both SSRs are driven through **Optocoupler MOSFET Driver Modules** for 3.3V→5V level shifting and optical isolation from the ESP32
 
 ---
 
@@ -82,56 +83,97 @@ The current control logic is based on hysteresis temperature control.
 
 | Component | Signal | ESP32 GPIO |
 |-----------|--------|------------|
-| MAX6675 | SCK | GPIO18 |
-| MAX6675 | CS | GPIO5 |
-| MAX6675 | SO (MISO) | GPIO19 |
-| DS18B20 (x2) | DATA | GPIO4 |
-| LCD 2004A (I2C) | SDA | GPIO21 |
-| LCD 2004A (I2C) | SCL | GPIO22 |
-| pH Sensor | Analog Out | GPIO34 (ADC1) |
-| SSR - Heater | Control | GPIO25 |
-| SSR - Pump | Control | GPIO26 |
+| DS18B20 (x3) | DATA | GPIO4 |
+| LCD 2004A (I2C) | SDA | GPIO21 (via level shifter) |
+| LCD 2004A (I2C) | SCL | GPIO22 (via level shifter) |
+| Optocoupler Module - Heater | PWM | GPIO25 |
+| Optocoupler Module - Pump | PWM | GPIO26 |
 
-> **Note:** GPIO34 is used for the pH sensor because ADC2 pins are unavailable when Wi-Fi is active. Only ADC1 pins (GPIO 32-39) can be used for analog readings with Wi-Fi enabled.
+Available GPIOs for future expansion: GPIO5, GPIO18, GPIO19, GPIO34
 
-> **Note:** Multiple DS18B20 sensors (biodigester + pump) share the same OneWire data line (GPIO4). Each sensor has a unique address and is identified automatically.
+> **Note:** All three DS18B20 sensors (biodigester + water tank + pump) share the same OneWire data line (GPIO4). Each sensor is identified by its unique 64-bit ROM address. Run the address scan on first boot and configure the addresses in the source code.
+
+### SSR Driving Circuit (Optocoupler MOSFET Driver Module)
+
+Each SSR is driven through an Optocoupler MOSFET Driver Module that provides:
+- 3.3V to 5V level shifting
+- Optical isolation between ESP32 and power circuitry
+- Reliable SSR triggering with sufficient voltage margin
+
+```
+Optocoupler MOSFET Driver Module (x2)
+┌──────────────────────────────────────────────┐
+│  Terminal    Connection                       │
+│  ────────   ──────────────────────────────    │
+│  PWM        ESP32 GPIO25 (heater) / GPIO26 (pump) │
+│  GND        ESP32 GND                        │
+│  DC+        5V (ESP32 VIN, shared rail)      │
+│  DC-        GND (common)                     │
+│  OUT+       SSR input (+)                    │
+│  OUT-       SSR input (-)                    │
+└──────────────────────────────────────────────┘
+
+Signal flow:
+ESP32 GPIO HIGH (3.3V) → Module PWM → Optocoupler ON → MOSFET ON
+→ DC+ (5V) flows to OUT+ → SSR input receives 5V → SSR switches AC load ON
+```
+
+### I2C Level Shifter (LCD)
+
+A bidirectional level shifter (BSS138-based module) is placed between the ESP32 (3.3V) and the LCD 2004A I2C backpack (5V) to ensure reliable I2C communication.
+
+```
+ESP32 3.3V side          Level Shifter          LCD 5V side
+GPIO21 (SDA)  ←────────→  LV1 ── HV1  ←────────→  PCF8574 SDA
+GPIO22 (SCL)  ←────────→  LV2 ── HV2  ←────────→  PCF8574 SCL
+3.3V          ──────────→  LV               HV  ←──────────  5V
+GND           ──────────→  GND             GND  ←──────────  GND
+```
 
 ### Power Distribution
 
 | Component | Voltage | Source |
 |-----------|---------|--------|
-| LCD 2004A | 5V | ESP32 VIN (5V) |
-| MAX6675 | 5V | ESP32 VIN (5V) |
-| pH Sensor Module | 5V | ESP32 VIN (5V) |
-| DS18B20 (x2) | 3.3V | ESP32 3.3V |
+| LCD 2004A | 5V | ESP32 VIN (5V) via +5V rail |
+| Optocoupler Module 1 (DC+) | 5V | ESP32 VIN (5V) via +5V rail |
+| Optocoupler Module 2 (DC+) | 5V | ESP32 VIN (5V) via +5V rail |
+| Level Shifter (HV) | 5V | ESP32 VIN (5V) via +5V rail |
+| DS18B20 (x3) | 3.3V | ESP32 3.3V |
+| Level Shifter (LV) | 3.3V | ESP32 3.3V |
 
+All 5V components share a common +5V rail branched from ESP32 VIN.
 All GND pins are connected to a common ground rail.
 
 ### Wiring Notes
 
 ```
-ESP32 5V (VIN) ─── Breadboard + Rail ──┬── LCD VCC
-                                       ├── MAX6675 VCC
-                                       └── pH Module VCC
+ESP32 VIN (5V) ─── Breadboard +5V Rail ──┬── LCD VCC (via level shifter HV)
+                                          ├── Optocoupler Module 1 DC+
+                                          ├── Optocoupler Module 2 DC+
+                                          └── Level Shifter HV
 
-ESP32 3.3V ──┬── DS18B20 VCC (Red wire, both sensors)
-             └── 4.7kΩ pull-up resistor ── DS18B20 DATA (White wire)
+ESP32 3.3V ──┬── DS18B20 VCC (Red wire, all 3 sensors)
+             ├── 4.7kΩ pull-up resistor ── DS18B20 DATA (White wire)
+             └── Level Shifter LV
 
-ESP32 GND ──────── Breadboard - Rail ──┬── LCD GND
-                                       ├── MAX6675 GND
-                                       ├── DS18B20 GND (Black wire, both sensors)
-                                       └── pH Module GND
+ESP32 GND ──────── Breadboard GND Rail ──┬── LCD GND
+                                         ├── DS18B20 GND (Black wire, all 3 sensors)
+                                         ├── Optocoupler Module 1 GND + DC-
+                                         ├── Optocoupler Module 2 GND + DC-
+                                         └── Level Shifter GND
 
-DS18B20 DATA (White wire, both sensors) ── GPIO4
+DS18B20 DATA (White wire, all 3 sensors) ── GPIO4
 ```
 
 > **Important:** A 4.7kΩ pull-up resistor is required between DS18B20 VCC (Red, 3.3V) and DATA (White, GPIO4) for reliable OneWire communication.
+
+> **Important:** Use waterproof stainless steel probe DS18B20 sensors (SUS316 recommended) for the biodigester slurry environment.
 
 ---
 
 ## Local LCD Display
 
-A 20x4 LCD (2004A, 5V Blue Screen) is connected to the ESP32 via I2C to provide on-site monitoring without requiring network access.
+A 20x4 LCD (2004A, 5V Blue Screen) is connected to the ESP32 via I2C through a bidirectional level shifter to provide on-site monitoring without requiring network access.
 
 ### Information displayed on the LCD
 - Line 1: Biodigester slurry temperature
@@ -145,30 +187,47 @@ This allows operators to check the system status directly at the installation si
 
 ## Data Transmission
 
-The ESP32 connects to a local Wi-Fi network and uploads sensor values to a custom website (tentatively considered to be a website via Railway) developed for this project.
+The ESP32 connects to a local Wi-Fi network and uploads sensor values via HTTPS to a monitoring platform hosted on Railway (Flask + PostgreSQL).
 
-### Data sent to the website
+### Data sent to the server
 - Biodigester temperature
 - Hot water tank temperature
-- pH
+- Pump temperature
 - Heating system status
+- Pump status
 - Timestamp
 
-This makes it possible to observe the system remotely in real time and keep a historical record of operation.
+### Security
+- Wi-Fi credentials are stored in ESP32 NVS (Non-Volatile Storage), not hardcoded in source
+- API communication uses HTTPS
+- Server-side credentials (DATABASE_URL, API keys) are stored as Railway environment variables
+- API endpoints are protected with API key authentication
 
 ---
 
 ## Monitoring Website
 
-The monitoring platform receives the data transmitted by the ESP32 and displays the process variables in real time.
+The monitoring platform receives the data transmitted by the ESP32 and displays the process variables in real time. It is hosted on Railway with Flask and PostgreSQL.
 
 ### Expected functions of the website
 - Live display of biodigester temperature
 - Live display of hot water tank temperature
-- Live display of pH
-- Heater status visualization
+- Heater and pump status visualization
 - Historical data storage for later analysis
 - Future alarm or notification system
+
+---
+
+## Enclosure and Environmental Protection
+
+The system is designed for outdoor installation at a biodigester site:
+
+- All electronics (ESP32, level shifter, optocoupler modules) are housed in an **IP65-rated waterproof enclosure** (ABS)
+- Cable entry points use **cable glands** for waterproof wire pass-through
+- **SSRs are mounted on aluminum heat sinks** attached to the enclosure exterior for thermal dissipation
+- Thermal compound is applied between SSR and heat sink
+- LCD is visible through an acrylic window in the enclosure
+- All three DS18B20 sensors use waterproof stainless steel probes
 
 ---
 
@@ -176,10 +235,12 @@ The monitoring platform receives the data transmitted by the ESP32 and displays 
 
 At this stage, the automation subsystem is defined to include:
 
-- Real-time sensing of key variables
-- Basic automatic temperature control
-- Wi-Fi communication with the monitoring website
-- Data logging for process evaluation
+- Real-time sensing of key variables (3 DS18B20 temperature sensors on shared OneWire bus)
+- Basic automatic temperature control with hysteresis
+- Optically isolated SSR driving for AC load switching
+- I2C level shifting for reliable LCD communication
+- Wi-Fi communication with the monitoring website (HTTPS)
+- Data logging in PostgreSQL for process evaluation
 
 ---
 
@@ -190,18 +251,20 @@ Possible future upgrades include:
 - Safety shutdown in case of sensor failure
 - Maximum water temperature protection
 - Remote setpoint adjustment from the website
-- Alarm system for abnormal pH or temperature values
+- Alarm system for abnormal temperature values
 - Full dashboard with historical graphs
+- pH sensor integration for fermentation monitoring (GPIO5, 18, or 19 available)
 
 ---
 
 ## Initial Reference Logic
 
-An initial version of the control logic was first developed in Arduino-style code using a DS18B20 sensor and SSR-based hysteresis control.  
-This logic will be migrated and expanded to the ESP32 platform, adding:
+An initial version of the control logic was first developed in Arduino-style code (see `proto.cpp`) using a MAX6675 sensor and MOSFET-based hysteresis control.
+This logic has been migrated and expanded to the ESP32 platform in `biogester.cpp`, adding:
 
-- Two temperature sensors instead of one
-- pH measurement
+- Three DS18B20 temperature sensors (address-based identification on shared OneWire bus)
+- Optocoupler MOSFET driver modules for SSR isolation
+- I2C level shifter for LCD
 - Wi-Fi communication
 - Data upload to the web platform
 
@@ -209,4 +272,6 @@ This logic will be migrated and expanded to the ESP32 platform, adding:
 
 ## Summary
 
-The automation subsystem is designed to turn the biodigester into a monitored and temperature-controlled system, using an ESP32 as the central controller.
+The automation subsystem is designed to turn the biodigester into a monitored and temperature-controlled system, using an ESP32-WROOM-32E as the central controller, with proper electrical isolation, level shifting, and environmental protection for reliable outdoor operation.
+
+Edit by: Bakuho Goto
