@@ -8,8 +8,8 @@
 const char* ssid     = "YOUR_SSID";
 const char* password = "YOUR_PASSWORD";
 
-// ===== DS18B20 Pin (Biodigester + Water Tank + Pump) =====
-// All three sensors share a single OneWire bus on GPIO4
+// ===== DS18B20 Pin (Biodigester + Water Tank) =====
+// Both sensors share a single OneWire bus on GPIO4
 // Red=3.3V, Black=GND, White=DATA
 // 4.7kohm pull-up resistor required between VCC (3.3V) and DATA
 #define ONE_WIRE_BUS 4
@@ -35,7 +35,6 @@ WebServer server(80);
 // Example: {0x28, 0xFF, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC}
 DeviceAddress bioSensorAddr   = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 DeviceAddress waterSensorAddr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-DeviceAddress pumpSensorAddr  = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 bool addressesConfigured = false;
 
 // ===== State Variables =====
@@ -43,7 +42,6 @@ bool heaterState = false;
 bool pumpState   = false;
 float bioTemp    = 0.0;
 float waterTemp  = 0.0;
-float pumpTemp   = 0.0;
 
 // ===== Scan and print DS18B20 addresses =====
 void scanDS18B20Addresses() {
@@ -62,8 +60,8 @@ void scanDS18B20Addresses() {
     }
   }
 
-  if (deviceCount < 3) {
-    Serial.printf("WARNING: Expected 3 DS18B20 sensors, found %d.\n", deviceCount);
+  if (deviceCount < 2) {
+    Serial.printf("WARNING: Expected 2 DS18B20 sensors, found %d.\n", deviceCount);
   }
 
   // Check if addresses have been configured (not all zeros)
@@ -73,7 +71,7 @@ void scanDS18B20Addresses() {
   }
   if (allZero) {
     Serial.println("WARNING: DS18B20 addresses not configured. Using index-based reading.");
-    Serial.println("         Copy the addresses above into bioSensorAddr, waterSensorAddr, and pumpSensorAddr.");
+    Serial.println("         Copy the addresses above into bioSensorAddr and waterSensorAddr.");
     addressesConfigured = false;
   } else {
     addressesConfigured = true;
@@ -86,7 +84,6 @@ void handleData() {
   String json = "{";
   json += "\"biodigester_temp\":" + String(bioTemp, 1) + ",";
   json += "\"water_temp\":" + String(waterTemp, 1) + ",";
-  json += "\"pump_temp\":" + String(pumpTemp, 1) + ",";
   json += "\"heater\":" + String(heaterState ? "true" : "false") + ",";
   json += "\"pump\":" + String(pumpState ? "true" : "false");
   json += "}";
@@ -104,7 +101,6 @@ void handleRoot() {
   html += "<h1>Biodigester Monitor</h1>";
   html += "<div class='card'><b>Biodigester Temp:</b> " + String(bioTemp, 1) + " &deg;C</div>";
   html += "<div class='card'><b>Water Tank Temp:</b> " + String(waterTemp, 1) + " &deg;C</div>";
-  html += "<div class='card'><b>Pump Temp:</b> " + String(pumpTemp, 1) + " &deg;C</div>";
   html += "<div class='card'><b>Heater:</b> <span class='" + String(heaterState ? "on'>ON" : "off'>OFF") + "</span></div>";
   html += "<div class='card'><b>Pump:</b> <span class='" + String(pumpState ? "on'>ON" : "off'>OFF") + "</span></div>";
   html += "</body></html>";
@@ -146,16 +142,14 @@ void setup() {
 void loop() {
   server.handleClient();
 
-  // DS18B20 reading (all three sensors)
+  // DS18B20 reading (both sensors)
   ds18b20.requestTemperatures();
   if (addressesConfigured) {
     bioTemp   = ds18b20.getTempC(bioSensorAddr);
     waterTemp = ds18b20.getTempC(waterSensorAddr);
-    pumpTemp  = ds18b20.getTempC(pumpSensorAddr);
   } else {
     bioTemp   = ds18b20.getTempCByIndex(0);
     waterTemp = ds18b20.getTempCByIndex(1);
-    pumpTemp  = ds18b20.getTempCByIndex(2);
   }
 
   // Sensor error check
@@ -184,8 +178,8 @@ void loop() {
   }
 
   // Serial output
-  Serial.printf("Bio: %.1fC | Water: %.1fC | Pump: %.1fC | Heater: %s | Pump: %s\n",
-    bioTemp, waterTemp, pumpTemp,
+  Serial.printf("Bio: %.1fC | Water: %.1fC | Heater: %s | Pump: %s\n",
+    bioTemp, waterTemp,
     heaterState ? "ON" : "OFF",
     pumpState ? "ON" : "OFF");
 

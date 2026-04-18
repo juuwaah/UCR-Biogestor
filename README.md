@@ -23,10 +23,7 @@ The ESP32 acquires the following process variables:
 - **Hot water tank temperature**
   Temperature of the water used in the external heating loop
 
-- **Pump temperature**
-  Temperature near the circulation pump for thermal management
-
-All three temperatures are measured using DS18B20 waterproof probe sensors on a shared OneWire bus.
+Both temperatures are measured using DS18B20 waterproof probe sensors on a shared OneWire bus.
 
 ---
 
@@ -65,7 +62,7 @@ The current control logic is based on hysteresis temperature control.
 - **ESP32-WROOM-32E** (Espressif)
 
 ### Sensors
-- **DS18B20 waterproof probe sensors (x3)** for biodigester slurry temperature, hot water tank temperature, and pump temperature management. All three sensors share a single OneWire bus and each is identified by its unique 64-bit ROM address.
+- **DS18B20 waterproof probe sensors (x2)** for biodigester slurry temperature and hot water tank temperature. Both sensors share a single OneWire bus and each is identified by its unique 64-bit ROM address.
 
 ### Display
 - **20x4 LCD 2004A Module (5V Blue Screen)** with I2C interface, connected via a **bidirectional I2C level shifter** (3.3V ↔ 5V) for local real-time display
@@ -83,7 +80,7 @@ The current control logic is based on hysteresis temperature control.
 
 | Component | Signal | ESP32 GPIO |
 |-----------|--------|------------|
-| DS18B20 (x3) | DATA | GPIO4 |
+| DS18B20 (x2) | DATA | GPIO4 |
 | LCD 2004A (I2C) | SDA | GPIO21 (via level shifter) |
 | LCD 2004A (I2C) | SCL | GPIO22 (via level shifter) |
 | Optocoupler Module - Heater | PWM | GPIO25 |
@@ -91,7 +88,7 @@ The current control logic is based on hysteresis temperature control.
 
 Available GPIOs for future expansion: GPIO5, GPIO18, GPIO19, GPIO34
 
-> **Note:** All three DS18B20 sensors (biodigester + water tank + pump) share the same OneWire data line (GPIO4). Each sensor is identified by its unique 64-bit ROM address. Run the address scan on first boot and configure the addresses in the source code.
+> **Note:** Both DS18B20 sensors (biodigester + water tank) share the same OneWire data line (GPIO4). Each sensor is identified by its unique 64-bit ROM address. Run the address scan on first boot and configure the addresses in the source code.
 
 ### SSR Driving Circuit (Optocoupler MOSFET Driver Module)
 
@@ -138,7 +135,7 @@ GND           ──────────→  GND             GND  ←──�
 | Optocoupler Module 1 (DC+) | 5V | ESP32 VIN (5V) via +5V rail |
 | Optocoupler Module 2 (DC+) | 5V | ESP32 VIN (5V) via +5V rail |
 | Level Shifter (HV) | 5V | ESP32 VIN (5V) via +5V rail |
-| DS18B20 (x3) | 3.3V | ESP32 3.3V |
+| DS18B20 (x2) | 3.3V | ESP32 3.3V |
 | Level Shifter (LV) | 3.3V | ESP32 3.3V |
 
 All 5V components share a common +5V rail branched from ESP32 VIN.
@@ -152,20 +149,20 @@ ESP32 VIN (5V) ─── Breadboard +5V Rail ──┬── LCD VCC (via level 
                                           ├── Optocoupler Module 2 DC+
                                           └── Level Shifter HV
 
-ESP32 3.3V ──┬── DS18B20 VCC (Red wire, all 3 sensors)
+ESP32 3.3V ──┬── DS18B20 VCC (Red wire, both sensors)
              ├── 4.7kΩ pull-up resistor ── DS18B20 DATA (White wire)
              └── Level Shifter LV
 
 ESP32 GND ──────── Breadboard GND Rail ──┬── LCD GND
-                                         ├── DS18B20 GND (Black wire, all 3 sensors)
+                                         ├── DS18B20 GND (Black wire, both sensors)
                                          ├── Optocoupler Module 1 GND + DC-
                                          ├── Optocoupler Module 2 GND + DC-
                                          └── Level Shifter GND
 
-DS18B20 DATA (White wire, all 3 sensors) ── GPIO4
+DS18B20 DATA (White wire, both sensors) ── GPIO4
 ```
 
-> **Important:** A 4.7kΩ pull-up resistor is required between DS18B20 VCC (Red, 3.3V) and DATA (White, GPIO4) for reliable OneWire communication.
+> **Important:** A single 4.7kΩ pull-up resistor is required between DS18B20 VCC (Red, 3.3V) and DATA (White, GPIO4) for reliable OneWire communication. One resistor is sufficient for both sensors on the shared bus.
 
 > **Important:** Use waterproof stainless steel probe DS18B20 sensors (SUS316 recommended) for the biodigester slurry environment.
 
@@ -192,7 +189,6 @@ The ESP32 connects to a local Wi-Fi network and uploads sensor values via HTTPS 
 ### Data sent to the server
 - Biodigester temperature
 - Hot water tank temperature
-- Pump temperature
 - Heating system status
 - Pump status
 - Timestamp
@@ -227,7 +223,7 @@ The system is designed for outdoor installation at a biodigester site:
 - **SSRs are mounted on aluminum heat sinks** attached to the enclosure exterior for thermal dissipation
 - Thermal compound is applied between SSR and heat sink
 - LCD is visible through an acrylic window in the enclosure
-- All three DS18B20 sensors use waterproof stainless steel probes
+- Both DS18B20 sensors use waterproof stainless steel probes
 
 ---
 
@@ -235,7 +231,7 @@ The system is designed for outdoor installation at a biodigester site:
 
 At this stage, the automation subsystem is defined to include:
 
-- Real-time sensing of key variables (3 DS18B20 temperature sensors on shared OneWire bus)
+- Real-time sensing of key variables (2 DS18B20 temperature sensors on shared OneWire bus)
 - Basic automatic temperature control with hysteresis
 - Optically isolated SSR driving for AC load switching
 - I2C level shifting for reliable LCD communication
@@ -262,7 +258,7 @@ Possible future upgrades include:
 An initial version of the control logic was first developed in Arduino-style code (see `proto.cpp`) using a MAX6675 sensor and MOSFET-based hysteresis control.
 This logic has been migrated and expanded to the ESP32 platform in `biogester.cpp`, adding:
 
-- Three DS18B20 temperature sensors (address-based identification on shared OneWire bus)
+- Two DS18B20 temperature sensors (address-based identification on shared OneWire bus)
 - Optocoupler MOSFET driver modules for SSR isolation
 - I2C level shifter for LCD
 - Wi-Fi communication
